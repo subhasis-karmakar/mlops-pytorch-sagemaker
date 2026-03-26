@@ -1,0 +1,4 @@
+pipeline_name: PyTorchMLOpsPipeline
+training_instance_type: ml.m5.large
+framework_version: 1.12
+py_version: py38
