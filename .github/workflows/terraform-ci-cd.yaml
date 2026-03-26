@@ -21,13 +21,14 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: us-west-2
 
       - name: Package Lambda
         run: |
-          cd terraform-mlops/lambda
-          zip -r ../lambda.zip retrain_trigger.py
-          
+          cd lambda
+          zip -r retrain_trigger.zip retrain_trigger.py
+          mv retrain_trigger.zip ../terraform-mlops/lambda.zip
+
       - name: Terraform Init
         run: cd terraform-mlops && terraform init
 
