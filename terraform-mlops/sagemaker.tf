@@ -1,5 +1,7 @@
 resource "aws_sagemaker_pipeline" "mlops_pipeline" {
-  name     = "PyTorchMLOpsPipeline"
+  pipeline_name         = "mlops-pytorch-pipeline"
+  pipeline_display_name = "PyTorch-MLOps-Pipeline" # spaces replaced with hyphens
+
   role_arn = aws_iam_role.sagemaker_role.arn
 
   pipeline_definition = <<EOF

@@ -16,21 +16,36 @@ resource "aws_s3_bucket" "mlops_monitoring" {
 
 resource "aws_s3_bucket" "mlops_checkpoints" {
   bucket = "mlops-checkpoints-bucket"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle_rule {
-    id      = "expire-old-checkpoints"
-    enabled = true
-    expiration {
-      days = 30
-    }
-  }
-
   tags = {
     Name        = "mlops-checkpoints"
     Environment = "mlops"
+  }
+}
+
+# Separate resource for versioning
+resource "aws_s3_bucket_versioning" "mlops_checkpoints_versioning" {
+  bucket = aws_s3_bucket.mlops_checkpoints.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Separate resource for lifecycle configuration
+resource "aws_s3_bucket_lifecycle_configuration" "mlops_checkpoints_lifecycle" {
+  bucket = aws_s3_bucket.mlops_checkpoints.id
+
+  rule {
+    id     = "expire-old-checkpoints"
+    status = "Enabled"
+
+    # Required filter/prefix block
+    filter {
+      prefix = "" # applies to all objects
+    }
+
+    expiration {
+      days = 30
+    }
   }
 }
