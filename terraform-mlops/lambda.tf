@@ -4,7 +4,7 @@ resource "aws_lambda_function" "retrain_lambda" {
   runtime       = "python3.9"
   handler       = "retrain_trigger.lambda_handler"
 
-  filename      = "${path.module}/../lambda/retrain_trigger.zip"
+  filename = "${path.module}/../lambda/retrain_trigger.zip"
 
   environment {
     variables = {
