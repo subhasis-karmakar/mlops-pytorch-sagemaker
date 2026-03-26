@@ -1,9 +1,9 @@
 resource "aws_lambda_function" "retrain_lambda" {
   function_name = "mlops-retrain-lambda"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
+  handler       = "retrain_trigger.lambda_handler"
   runtime       = "python3.9"
-  filename      = "lambda.zip"
+  filename      = "${path.module}/lambda.zip"
 
   environment {
     variables = {
