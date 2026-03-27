@@ -5,29 +5,30 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-from src.model import SimpleCNN   # fixed import
+from torch.utils.data import DataLoader
+from src.model import SimpleCNN   #  absolute import
 
 def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
     ])
+
+    # Load CIFAR-10 training dataset
     trainset = torchvision.datasets.CIFAR10(
         root=data_dir,
         train=True,
         download=True,
         transform=transform
     )
-    trainloader = torch.utils.data.DataLoader(
-        trainset,
-        batch_size=batch_size,
-        shuffle=True
-    )
+    trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
 
+    # Initialize model, loss, optimizer
     model = SimpleCNN()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
+    # Resume from checkpoint if available
     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pth")
     start_epoch = 0
     if os.path.exists(checkpoint_path):
@@ -37,6 +38,7 @@ def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
         start_epoch = checkpoint["epoch"] + 1
         print(f"Resuming from epoch {start_epoch}")
 
+    # Training loop
     for epoch in range(start_epoch, epochs):
         for inputs, labels in trainloader:
             optimizer.zero_grad()
@@ -47,12 +49,14 @@ def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
 
         print(f"Epoch {epoch+1}, Loss: {loss.item()}")
 
+        # Save checkpoint
         torch.save({
             "epoch": epoch,
             "model_state": model.state_dict(),
             "optimizer_state": optimizer.state_dict()
         }, checkpoint_path)
 
+    # Save final model
     torch.save(model.state_dict(), os.path.join(model_dir, "model.pth"))
 
 if __name__ == "__main__":
