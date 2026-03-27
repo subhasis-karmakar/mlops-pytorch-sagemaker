@@ -1,5 +1,5 @@
 import torch
-from model import SimpleCNN
+from src.model import SimpleCNN
 
 def model_fn(model_dir):
     model = SimpleCNN()

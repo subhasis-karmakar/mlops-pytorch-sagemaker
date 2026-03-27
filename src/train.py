@@ -1,6 +1,6 @@
 import argparse, os, torch, torch.nn as nn, torch.optim as optim
 import torchvision, torchvision.transforms as transforms
-from model import SimpleCNN
+from src.model import SimpleCNN
 
 def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
