@@ -13,24 +13,13 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 
 class SimpleCNN(nn.Module):
     def __init__(self):
-        super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-        )
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(64 * 8 * 8, 128),
-            nn.ReLU(),
-            nn.Linear(128, 10),
-        )
+        super(SimpleCNN, self).__init__()
+        self.conv = nn.Conv2d(3, 32, 3, 1)
+        self.fc = nn.Linear(32 * 30 * 30, 10)
 
     def forward(self, x):
-        x = self.conv(x)
+        x = nn.functional.relu(self.conv(x))
+        x = x.view(x.size(0), -1)
         return self.fc(x)
 
 
@@ -54,7 +43,8 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
     model_path = extract_model_artifact(model_artifact_path, extracted_dir)
 
     model = SimpleCNN().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
     model.eval()
 
     transform = transforms.Compose([
