@@ -18,8 +18,8 @@ pipeline_session = PipelineSession()
 # Estimator with checkpointing
 
 estimator = PyTorch(
-    entry_point="train.py",          # file name only
-    source_dir="src",                # upload src/ folder
+    entry_point="src/train.py",   # point to train.py inside src
+    source_dir=".",               # upload the whole repo
     role=role,
     instance_type="ml.m5.large",
     instance_count=1,
