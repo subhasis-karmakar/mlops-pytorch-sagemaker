@@ -90,9 +90,9 @@ model = Model(
 model_step_args = model.create(instance_type="ml.m5.large")
 model_step = ModelStep(name="RegisterModel", step_args=model_step_args)
 
-# Condition: only register if accuracy >= 0.88
+# Condition: only register if accuracy >= 0.8
 cond_gte = ConditionGreaterThanOrEqualTo(
-    left=eval_step.properties.PropertyFiles["EvaluationReport"].accuracy,
+    left=eval_step.properties.PropertyFiles[evaluation_report].accuracy,
     right=0.8
 )
 
@@ -102,7 +102,6 @@ cond_step = ConditionStep(
     if_steps=[model_step],
     else_steps=[]   # skip registration if accuracy < 0.8
 )
-
 
 # Deployment step: create a real-time endpoint
 deploy_step_args = model.deploy(
