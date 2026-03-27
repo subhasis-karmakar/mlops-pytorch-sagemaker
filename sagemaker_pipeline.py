@@ -20,6 +20,7 @@ estimator = PyTorch(
     entry_point="src/train.py",
     role=role,
     instance_type="ml.m5.large",
+    instance_count=1,
     framework_version="1.12",
     py_version="py38",
     hyperparameters={"epochs": 5, "batch_size": 64, "lr": 0.001},
