@@ -39,7 +39,11 @@ estimator = PyTorch(
     instance_count=1,
     framework_version="1.12",
     py_version="py38",
-    hyperparameters={"epochs": 5},
+    hyperparameters={
+        "epochs": 5,
+        "batch_size": 64,
+        "lr": 0.001,
+    },
     checkpoint_s3_uri=checkpoint_s3_uri,
     checkpoint_local_path="/opt/ml/checkpoints",
     sagemaker_session=pipeline_session,
@@ -82,11 +86,7 @@ eval_args = script_eval.run(
         ProcessingInput(
             source=train_step.properties.ModelArtifacts.S3ModelArtifacts,
             destination="/opt/ml/processing/model",
-        ),
-        ProcessingInput(
-            source=f"{data_s3_uri}cifar10/test",
-            destination="/opt/ml/processing/test",
-        ),
+        )
     ],
     outputs=[
         ProcessingOutput(
@@ -145,7 +145,7 @@ register_step = RegisterModel(
 )
 
 # -------------------------
-# Explicit failure when accuracy is low
+# Explicit failure if accuracy is low
 # -------------------------
 fail_step = FailStep(
     name="AccuracyTooLow",
@@ -168,7 +168,7 @@ cond_step = ConditionStep(
 )
 
 # -------------------------
-# Pipeline
+# Pipeline definition
 # -------------------------
 pipeline = Pipeline(
     name="PyTorchMLOpsPipeline",

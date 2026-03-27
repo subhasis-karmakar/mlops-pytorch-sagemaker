@@ -2,6 +2,7 @@ import os
 import json
 import argparse
 import tarfile
+
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -14,6 +15,9 @@ from src.model import SimpleCNN
 def extract_model_artifact(model_tar_path: str, extract_dir: str) -> str:
     os.makedirs(extract_dir, exist_ok=True)
 
+    if not tarfile.is_tarfile(model_tar_path):
+        raise ValueError(f"Expected a tar.gz model artifact, got: {model_tar_path}")
+
     with tarfile.open(model_tar_path, "r:gz") as tar:
         tar.extractall(path=extract_dir)
 
@@ -25,25 +29,25 @@ def extract_model_artifact(model_tar_path: str, extract_dir: str) -> str:
 
 
 def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     extracted_dir = "/opt/ml/processing/model_extracted"
     model_path = extract_model_artifact(model_artifact_path, extracted_dir)
 
-    model = SimpleCNN()
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    model = SimpleCNN().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ]
-    )
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
 
     test_dataset = torchvision.datasets.CIFAR10(
         root=data_dir,
         train=False,
         download=True,
-        transform=transform,
+        transform=transform
     )
 
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
@@ -53,10 +57,12 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
 
     with torch.no_grad():
         for inputs, targets in test_loader:
+            inputs = inputs.to(device)
             outputs = model(inputs)
             _, predicted = torch.max(outputs, 1)
+
             preds.extend(predicted.cpu().numpy().tolist())
-            labels.extend(targets.cpu().numpy().tolist())
+            labels.extend(targets.numpy().tolist())
 
     accuracy = accuracy_score(labels, preds)
     report = classification_report(labels, preds, output_dict=True)
@@ -68,7 +74,7 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
             "precision": float(report["weighted avg"]["precision"]),
             "recall": float(report["weighted avg"]["recall"]),
             "f1": float(report["weighted avg"]["f1-score"]),
-            "confusion_matrix": confusion,
+            "confusion_matrix": confusion
         }
     }
 
@@ -87,17 +93,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_path",
         type=str,
-        default="/opt/ml/processing/model/model.tar.gz",
+        default="/opt/ml/processing/model/model.tar.gz"
     )
     parser.add_argument(
         "--data_dir",
         type=str,
-        default="/opt/ml/processing/test",
+        default="/opt/ml/processing/test"
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/opt/ml/processing/evaluation",
+        default="/opt/ml/processing/evaluation"
     )
     args = parser.parse_args()
 
