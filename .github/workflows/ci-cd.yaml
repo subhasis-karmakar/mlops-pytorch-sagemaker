@@ -14,6 +14,7 @@ jobs:
         with:
           python-version: '3.9'
       - run: pip install -r requirements.txt
+      - run: export PYTHONPATH=$PYTHONPATH:$(pwd)
       - run: pytest tests/
       - env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
