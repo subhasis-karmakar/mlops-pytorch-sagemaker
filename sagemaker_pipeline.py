@@ -1,17 +1,19 @@
 from sagemaker.workflow.pipeline import Pipeline
 from sagemaker.workflow.pipeline_context import PipelineSession
 from sagemaker.workflow.steps import TrainingStep, ProcessingStep
-from sagemaker.workflow.functions import JsonGet
+from sagemaker.workflow.functions import JsonGet, Join
 from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.parameters import ParameterFloat
 from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.condition_step import ConditionStep
 from sagemaker.workflow.step_collections import RegisterModel
+from sagemaker.workflow.fail_step import FailStep
 
 from sagemaker.pytorch import PyTorch
 from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
 from sagemaker.model_metrics import MetricsSource, ModelMetrics
 from sagemaker.inputs import TrainingInput
+
 
 role = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
@@ -26,7 +28,9 @@ accuracy_threshold = ParameterFloat(
     default_value=0.20,
 )
 
-# Training
+# -------------------------
+# Training step
+# -------------------------
 estimator = PyTorch(
     entry_point="src/train.py",
     source_dir=".",
@@ -44,7 +48,7 @@ estimator = PyTorch(
 train_args = estimator.fit(
     inputs={
         "training": TrainingInput(
-            s3_data=f"{data_s3_uri}cifar10/train"
+            s3_data=f"{data_s3_uri}cifar10/train",
         )
     }
 )
@@ -54,7 +58,9 @@ train_step = TrainingStep(
     step_args=train_args,
 )
 
-# Evaluation
+# -------------------------
+# Evaluation step
+# -------------------------
 script_eval = ScriptProcessor(
     image_uri=estimator.training_image_uri(),
     command=["python3"],
@@ -75,18 +81,18 @@ eval_args = script_eval.run(
     inputs=[
         ProcessingInput(
             source=train_step.properties.ModelArtifacts.S3ModelArtifacts,
-            destination="/opt/ml/processing/model"
+            destination="/opt/ml/processing/model",
         ),
         ProcessingInput(
             source=f"{data_s3_uri}cifar10/test",
-            destination="/opt/ml/processing/test"
-        )
+            destination="/opt/ml/processing/test",
+        ),
     ],
     outputs=[
         ProcessingOutput(
             output_name="evaluation",
             source="/opt/ml/processing/evaluation",
-            destination=f"{monitoring_s3_uri}evaluation"
+            destination=f"{monitoring_s3_uri}evaluation",
         )
     ],
 )
@@ -97,15 +103,34 @@ eval_step = ProcessingStep(
     property_files=[evaluation_report],
 )
 
-# Model metrics
+# -------------------------
+# Read evaluation accuracy
+# -------------------------
+eval_accuracy = JsonGet(
+    step_name=eval_step.name,
+    property_file=evaluation_report,
+    json_path="evaluation.accuracy",
+)
+
+# -------------------------
+# Model metrics for registry
+# -------------------------
 model_metrics = ModelMetrics(
     model_statistics=MetricsSource(
-        s3_uri=f"{monitoring_s3_uri}evaluation/evaluation.json",
-        content_type="application/json"
+        s3_uri=Join(
+            on="/",
+            values=[
+                eval_step.properties.ProcessingOutputConfig.Outputs["evaluation"].S3Output.S3Uri,
+                "evaluation.json",
+            ],
+        ),
+        content_type="application/json",
     )
 )
 
+# -------------------------
 # Register model
+# -------------------------
 register_step = RegisterModel(
     name="RegisterModel",
     estimator=estimator,
@@ -119,25 +144,32 @@ register_step = RegisterModel(
     approval_status="Approved",
 )
 
-# Condition
-eval_accuracy = JsonGet(
-    step_name=eval_step.name,
-    property_file=evaluation_report,
-    json_path="evaluation.accuracy"
+# -------------------------
+# Explicit failure when accuracy is low
+# -------------------------
+fail_step = FailStep(
+    name="AccuracyTooLow",
+    error_message="Model accuracy did not meet threshold for registration.",
 )
 
+# -------------------------
+# Condition step
+# -------------------------
 cond_step = ConditionStep(
     name="CheckAccuracy",
     conditions=[
         ConditionGreaterThanOrEqualTo(
             left=eval_accuracy,
-            right=accuracy_threshold
+            right=accuracy_threshold,
         )
     ],
     if_steps=[register_step],
-    else_steps=[]
+    else_steps=[fail_step],
 )
 
+# -------------------------
+# Pipeline
+# -------------------------
 pipeline = Pipeline(
     name="PyTorchMLOpsPipeline",
     parameters=[accuracy_threshold],
