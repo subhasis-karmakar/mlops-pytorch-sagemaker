@@ -91,7 +91,7 @@ model_step = ModelStep(name="RegisterModel", step_args=model_step_args)
 
 # Condition: only register if accuracy >= 0.8
 cond_gte = ConditionGreaterThanOrEqualTo(
-    left=eval_step.properties.PropertyFiles[evaluation_report].JsonGet("accuracy"),
+    left=evaluation_report.JsonGet("accuracy"),
     right=0.8
 )
 
