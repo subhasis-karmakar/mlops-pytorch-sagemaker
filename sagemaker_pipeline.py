@@ -3,13 +3,13 @@ from sagemaker.workflow.steps import TrainingStep
 from sagemaker.workflow.model_step import ModelStep
 from sagemaker.pytorch import PyTorch
 from sagemaker.model import Model
-from sagemaker import get_execution_role
+import sagemaker
 
 # Define bucket URIs as variables
 checkpoint_s3_uri = "s3://mlops-checkpoints-bucket-8a20dd98/"
 data_s3_uri = "s3://mlops-data-bucket-ed1659d4/"
 
-role = get_execution_role()
+role = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
 estimator = PyTorch(
     entry_point="src/train.py",
