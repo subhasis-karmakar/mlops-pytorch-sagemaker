@@ -1,5 +1,3 @@
-import os
-
 from sagemaker.workflow.pipeline import Pipeline
 from sagemaker.workflow.pipeline_context import PipelineSession
 from sagemaker.workflow.steps import TrainingStep, ProcessingStep
@@ -14,8 +12,6 @@ from sagemaker.pytorch import PyTorch
 from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
 from sagemaker.model_metrics import MetricsSource, ModelMetrics
 from sagemaker.inputs import TrainingInput
-from sagemaker.pytorch.model import PyTorchModel
-
 
 role = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
@@ -30,9 +26,7 @@ accuracy_threshold = ParameterFloat(
     default_value=0.80,
 )
 
-# =========================
 # Training
-# =========================
 estimator = PyTorch(
     entry_point="src/train.py",
     source_dir=".",
@@ -60,9 +54,7 @@ train_step = TrainingStep(
     step_args=train_args,
 )
 
-# =========================
 # Evaluation
-# =========================
 script_eval = ScriptProcessor(
     image_uri=estimator.training_image_uri(),
     command=["python3"],
@@ -105,9 +97,7 @@ eval_step = ProcessingStep(
     property_files=[evaluation_report],
 )
 
-# =========================
-# Register Model
-# =========================
+# Model metrics
 model_metrics = ModelMetrics(
     model_statistics=MetricsSource(
         s3_uri=f"{monitoring_s3_uri}evaluation/evaluation.json",
@@ -115,18 +105,21 @@ model_metrics = ModelMetrics(
     )
 )
 
+# Register model
 register_step = RegisterModel(
     name="RegisterModel",
     estimator=estimator,
     model_data=train_step.properties.ModelArtifacts.S3ModelArtifacts,
+    content_types=["application/x-image"],
+    response_types=["application/json"],
+    inference_instances=["ml.m5.large"],
+    transform_instances=["ml.m5.large"],
     model_package_group_name="PyTorchMLOpsModelGroup",
     model_metrics=model_metrics,
     approval_status="PendingManualApproval",
 )
 
-# =========================
-# Condition Step (FIXED)
-# =========================
+# Condition
 eval_accuracy = JsonGet(
     step_name=eval_step.name,
     property_file=evaluation_report,
@@ -145,9 +138,6 @@ cond_step = ConditionStep(
     else_steps=[]
 )
 
-# =========================
-# Pipeline
-# =========================
 pipeline = Pipeline(
     name="PyTorchMLOpsPipeline",
     parameters=[accuracy_threshold],
