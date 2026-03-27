@@ -16,9 +16,10 @@ monitoring_s3_uri = "s3://mlops-monitoring-bucket-b9c36351/"
 pipeline_session = PipelineSession()
 
 # Estimator with checkpointing
+
 estimator = PyTorch(
-    entry_point="train.py",          # run from repo root
-    source_dir=".",                  # upload entire repo so src/ is included
+    entry_point="train.py",          # file name only
+    source_dir="src",                # upload src/ folder
     role=role,
     instance_type="ml.m5.large",
     instance_count=1,
@@ -29,6 +30,7 @@ estimator = PyTorch(
     checkpoint_local_path="/opt/ml/checkpoints",
     sagemaker_session=pipeline_session
 )
+
 
 train_step = TrainingStep(
     name="TrainModel",
