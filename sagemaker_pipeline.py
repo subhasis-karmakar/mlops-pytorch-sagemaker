@@ -16,13 +16,12 @@ checkpoint_s3_uri = "s3://mlops-checkpoints-bucket-8a20dd98/"
 data_s3_uri = "s3://mlops-data-bucket-ed1659d4/"
 monitoring_s3_uri = "s3://mlops-monitoring-bucket-b9c36351/"
 
-# Pipeline session
 pipeline_session = PipelineSession()
 
-# Estimator with checkpointing + output path
+# Estimator
 estimator = PyTorch(
     entry_point="src/train.py",
-    source_dir=".",               # upload the whole repo
+    source_dir=".",
     role=role,
     instance_type="ml.m5.large",
     instance_count=1,
@@ -32,7 +31,7 @@ estimator = PyTorch(
     checkpoint_s3_uri=checkpoint_s3_uri,
     checkpoint_local_path="/opt/ml/checkpoints",
     sagemaker_session=pipeline_session,
-    output_path=monitoring_s3_uri   # ✅ model + evaluation JSONs land here
+    output_path=monitoring_s3_uri
 )
 
 train_step = TrainingStep(
@@ -41,7 +40,7 @@ train_step = TrainingStep(
     inputs={"training": f"{data_s3_uri}cifar10/train"}
 )
 
-# Evaluation step: run evaluate.py and produce evaluation.json
+# Evaluation step
 script_eval = ScriptProcessor(
     image_uri=estimator.training_image_uri(),
     command=["python3"],
@@ -92,7 +91,7 @@ model_step = ModelStep(name="RegisterModel", step_args=model_step_args)
 
 # Condition: only register if accuracy >= 0.8
 cond_gte = ConditionGreaterThanOrEqualTo(
-    left=eval_step.properties.PropertyFiles[evaluation_report].accuracy,
+    left=eval_step.properties.PropertyFiles[evaluation_report].JsonGet("accuracy"),
     right=0.8
 )
 
@@ -100,17 +99,16 @@ cond_step = ConditionStep(
     name="CheckAccuracy",
     conditions=[cond_gte],
     if_steps=[model_step],
-    else_steps=[]   # skip registration if accuracy < 0.8
+    else_steps=[]
 )
 
-# Deployment step: create a real-time endpoint
+# Deployment step
 deploy_step_args = model.deploy(
     initial_instance_count=1,
     instance_type="ml.m5.large",
     endpoint_name="pytorch-mlops-endpoint"
 )
 
-# Pipeline definition
 pipeline = Pipeline(
     name="PyTorchMLOpsPipeline",
     steps=[train_step, eval_step, cond_step, deploy_step_args],
