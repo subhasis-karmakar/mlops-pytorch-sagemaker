@@ -4,19 +4,38 @@ import argparse
 import tarfile
 
 import torch
+import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-from src.model import SimpleCNN
+
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 8 * 8, 128),
+            nn.ReLU(),
+            nn.Linear(128, 10),
+        )
+
+    def forward(self, x):
+        x = self.conv(x)
+        return self.fc(x)
 
 
 def extract_model_artifact(model_tar_path: str, extract_dir: str) -> str:
     os.makedirs(extract_dir, exist_ok=True)
-
-    if not tarfile.is_tarfile(model_tar_path):
-        raise ValueError(f"Expected a tar.gz model artifact, got: {model_tar_path}")
 
     with tarfile.open(model_tar_path, "r:gz") as tar:
         tar.extractall(path=extract_dir)
@@ -60,7 +79,6 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
             inputs = inputs.to(device)
             outputs = model(inputs)
             _, predicted = torch.max(outputs, 1)
-
             preds.extend(predicted.cpu().numpy().tolist())
             labels.extend(targets.numpy().tolist())
 
@@ -90,21 +108,9 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_path",
-        type=str,
-        default="/opt/ml/processing/model/model.tar.gz"
-    )
-    parser.add_argument(
-        "--data_dir",
-        type=str,
-        default="/opt/ml/processing/test"
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="/opt/ml/processing/evaluation"
-    )
+    parser.add_argument("--model_path", type=str, default="/opt/ml/processing/model/model.tar.gz")
+    parser.add_argument("--data_dir", type=str, default="/opt/ml/processing/test")
+    parser.add_argument("--output_dir", type=str, default="/opt/ml/processing/evaluation")
     args = parser.parse_args()
 
     evaluate(
