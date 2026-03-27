@@ -1,14 +1,21 @@
 import os
+
 from sagemaker.workflow.pipeline import Pipeline
-from sagemaker.workflow.steps import TrainingStep, ProcessingStep
-from sagemaker.workflow.model_step import ModelStep
 from sagemaker.workflow.pipeline_context import PipelineSession
-from sagemaker.pytorch import PyTorch
-from sagemaker.model import Model
-from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
+from sagemaker.workflow.steps import TrainingStep, ProcessingStep
+from sagemaker.workflow.functions import JsonGet
 from sagemaker.workflow.properties import PropertyFile
+from sagemaker.workflow.parameters import ParameterFloat
 from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.condition_step import ConditionStep
+from sagemaker.workflow.step_collections import RegisterModel
+
+from sagemaker.pytorch import PyTorch
+from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
+from sagemaker.model_metrics import MetricsSource, ModelMetrics
+from sagemaker.inputs import TrainingInput
+from sagemaker.pytorch.model import PyTorchModel
+
 
 role = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
@@ -18,7 +25,14 @@ monitoring_s3_uri = "s3://mlops-monitoring-bucket-b9c36351/"
 
 pipeline_session = PipelineSession()
 
-# Estimator
+accuracy_threshold = ParameterFloat(
+    name="AccuracyThreshold",
+    default_value=0.80,
+)
+
+# =========================
+# Training
+# =========================
 estimator = PyTorch(
     entry_point="src/train.py",
     source_dir=".",
@@ -27,92 +41,118 @@ estimator = PyTorch(
     instance_count=1,
     framework_version="1.12",
     py_version="py38",
-    hyperparameters={"epochs": 5, "batch_size": 64, "lr": 0.001},
+    hyperparameters={"epochs": 5},
     checkpoint_s3_uri=checkpoint_s3_uri,
     checkpoint_local_path="/opt/ml/checkpoints",
     sagemaker_session=pipeline_session,
-    output_path=monitoring_s3_uri
+)
+
+train_args = estimator.fit(
+    inputs={
+        "training": TrainingInput(
+            s3_data=f"{data_s3_uri}cifar10/train"
+        )
+    }
 )
 
 train_step = TrainingStep(
     name="TrainModel",
-    estimator=estimator,
-    inputs={"training": f"{data_s3_uri}cifar10/train"}
+    step_args=train_args,
 )
 
-# Evaluation step
+# =========================
+# Evaluation
+# =========================
 script_eval = ScriptProcessor(
     image_uri=estimator.training_image_uri(),
     command=["python3"],
     role=role,
     instance_count=1,
     instance_type="ml.m5.large",
-    sagemaker_session=pipeline_session
+    sagemaker_session=pipeline_session,
 )
 
 evaluation_report = PropertyFile(
     name="EvaluationReport",
-    output_name="evaluation_output",
-    path="evaluation.json"
+    output_name="evaluation",
+    path="evaluation.json",
 )
 
-eval_step = ProcessingStep(
-    name="EvaluateModel",
-    processor=script_eval,
+eval_args = script_eval.run(
+    code="src/evaluate.py",
     inputs=[
         ProcessingInput(
             source=train_step.properties.ModelArtifacts.S3ModelArtifacts,
             destination="/opt/ml/processing/model"
+        ),
+        ProcessingInput(
+            source=f"{data_s3_uri}cifar10/test",
+            destination="/opt/ml/processing/test"
         )
     ],
     outputs=[
         ProcessingOutput(
-            source="/opt/ml/processing/model",
-            destination=monitoring_s3_uri,
-            output_name="evaluation_output"
+            output_name="evaluation",
+            source="/opt/ml/processing/evaluation",
+            destination=f"{monitoring_s3_uri}evaluation"
         )
     ],
-    code="src/evaluate.py",
-    property_files=[evaluation_report]
 )
 
-# Register model
-model = Model(
-    image_uri=estimator.training_image_uri(),
+eval_step = ProcessingStep(
+    name="EvaluateModel",
+    step_args=eval_args,
+    property_files=[evaluation_report],
+)
+
+# =========================
+# Register Model
+# =========================
+model_metrics = ModelMetrics(
+    model_statistics=MetricsSource(
+        s3_uri=f"{monitoring_s3_uri}evaluation/evaluation.json",
+        content_type="application/json"
+    )
+)
+
+register_step = RegisterModel(
+    name="RegisterModel",
+    estimator=estimator,
     model_data=train_step.properties.ModelArtifacts.S3ModelArtifacts,
-    role=role,
-    entry_point="src/inference.py",
-    source_dir=".",
-    sagemaker_session=pipeline_session
+    model_package_group_name="PyTorchMLOpsModelGroup",
+    model_metrics=model_metrics,
+    approval_status="PendingManualApproval",
 )
 
-model_step_args = model.create(instance_type="ml.m5.large")
-model_step = ModelStep(name="RegisterModel", step_args=model_step_args)
-
-#  Condition: only register if accuracy >= 0.8
-cond_gte = ConditionGreaterThanOrEqualTo(
-    left=eval_step.properties.PropertyFiles["EvaluationReport"].JsonGet("accuracy"),
-    right=0.8
+# =========================
+# Condition Step (FIXED)
+# =========================
+eval_accuracy = JsonGet(
+    step_name=eval_step.name,
+    property_file=evaluation_report,
+    json_path="evaluation.accuracy"
 )
 
 cond_step = ConditionStep(
     name="CheckAccuracy",
-    conditions=[cond_gte],
-    if_steps=[model_step],
+    conditions=[
+        ConditionGreaterThanOrEqualTo(
+            left=eval_accuracy,
+            right=accuracy_threshold
+        )
+    ],
+    if_steps=[register_step],
     else_steps=[]
 )
 
-# Deployment step
-deploy_step_args = model.deploy(
-    initial_instance_count=1,
-    instance_type="ml.m5.large",
-    endpoint_name="pytorch-mlops-endpoint"
-)
-
+# =========================
+# Pipeline
+# =========================
 pipeline = Pipeline(
     name="PyTorchMLOpsPipeline",
-    steps=[train_step, eval_step, cond_step, deploy_step_args],
-    sagemaker_session=pipeline_session
+    parameters=[accuracy_threshold],
+    steps=[train_step, eval_step, cond_step],
+    sagemaker_session=pipeline_session,
 )
 
 if __name__ == "__main__":
