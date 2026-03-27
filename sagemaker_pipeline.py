@@ -17,7 +17,8 @@ pipeline_session = PipelineSession()
 
 # Estimator with checkpointing
 estimator = PyTorch(
-    entry_point="src/train.py",
+    entry_point="train.py",          # run from repo root
+    source_dir=".",                  # upload entire repo so src/ is included
     role=role,
     instance_type="ml.m5.large",
     instance_count=1,
@@ -32,16 +33,15 @@ estimator = PyTorch(
 train_step = TrainingStep(
     name="TrainModel",
     estimator=estimator,
-    inputs={"training": f"{data_s3_uri}cifar10/train"}
-
+    inputs={"training": f"{data_s3_uri}cifar10/train"}  # fixed double slash
 )
 
 model = Model(
     image_uri=estimator.training_image_uri(),
     model_data=train_step.properties.ModelArtifacts.S3ModelArtifacts,
     role=role,
-    entry_point="src/inference.py",
-    source_dir="src",
+    entry_point="inference.py",      # run inference script from repo root
+    source_dir=".",                  #  upload entire repo
     sagemaker_session=pipeline_session
 )
 
