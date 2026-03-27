@@ -1,5 +1,6 @@
 from sagemaker.workflow.pipeline import Pipeline
-from sagemaker.workflow.steps import TrainingStep, ModelStep
+from sagemaker.workflow.steps import TrainingStep
+from sagemaker.workflow.model_step import ModelStep
 from sagemaker.pytorch import PyTorch
 from sagemaker.model import Model
 from sagemaker import get_execution_role
