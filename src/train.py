@@ -1,11 +1,28 @@
-import argparse, os, torch, torch.nn as nn, torch.optim as optim
-import torchvision, torchvision.transforms as transforms
-from src.model import SimpleCNN
+import argparse
+import os
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+from src.model import SimpleCNN   # fixed import
 
 def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-    trainset = torchvision.datasets.CIFAR10(root=data_dir, train=True, download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
+    trainset = torchvision.datasets.CIFAR10(
+        root=data_dir,
+        train=True,
+        download=True,
+        transform=transform
+    )
+    trainloader = torch.utils.data.DataLoader(
+        trainset,
+        batch_size=batch_size,
+        shuffle=True
+    )
 
     model = SimpleCNN()
     criterion = nn.CrossEntropyLoss()
@@ -36,7 +53,7 @@ def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
             "optimizer_state": optimizer.state_dict()
         }, checkpoint_path)
 
-    torch.save(model.state_dict(), f"{model_dir}/model.pth")
+    torch.save(model.state_dict(), os.path.join(model_dir, "model.pth"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
