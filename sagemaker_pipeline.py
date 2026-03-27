@@ -89,9 +89,9 @@ model = Model(
 model_step_args = model.create(instance_type="ml.m5.large")
 model_step = ModelStep(name="RegisterModel", step_args=model_step_args)
 
-# Condition: only register if accuracy >= 0.8
+#  Condition: only register if accuracy >= 0.8
 cond_gte = ConditionGreaterThanOrEqualTo(
-    left=evaluation_report.JsonGet("accuracy"),
+    left=eval_step.properties.PropertyFiles["EvaluationReport"].JsonGet("accuracy"),
     right=0.8
 )
 
