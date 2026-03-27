@@ -4,6 +4,10 @@ from sagemaker.pytorch import PyTorch
 from sagemaker.model import Model
 from sagemaker import get_execution_role
 
+# Define bucket URIs as variables
+checkpoint_s3_uri = "s3://mlops-checkpoints-bucket-8a20dd98/"
+data_s3_uri = "s3://mlops-data-bucket-ed1659d4/"
+
 role = get_execution_role()
 
 estimator = PyTorch(
@@ -18,9 +22,9 @@ estimator = PyTorch(
 train_step = TrainingStep(
     name="TrainModel",
     estimator=estimator,
-    inputs={"training": "s3://your-bucket/cifar10/train"},
+    inputs={"training": f"{data_s3_uri}/cifar10/train"},
     checkpoint_config={
-        "S3Uri": "s3://mlops-checkpoints-bucket/",
+        "S3Uri": checkpoint_s3_uri,
         "LocalPath": "/opt/ml/checkpoints"
     }
 )
