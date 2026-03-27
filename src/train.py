@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-from . import SimpleCNN   # fixed import
+from .model import SimpleCNN   # fixed import
 
 def train(batch_size, epochs, lr, model_dir, data_dir, checkpoint_dir):
     transform = transforms.Compose([
