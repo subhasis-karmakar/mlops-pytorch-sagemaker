@@ -116,7 +116,7 @@ register_step = RegisterModel(
     transform_instances=["ml.m5.large"],
     model_package_group_name="PyTorchMLOpsModelGroup",
     model_metrics=model_metrics,
-    approval_status="PendingManualApproval",
+    approval_status="Approved",
 )
 
 # Condition
