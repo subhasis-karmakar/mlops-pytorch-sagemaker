@@ -32,7 +32,8 @@ estimator = PyTorch(
 train_step = TrainingStep(
     name="TrainModel",
     estimator=estimator,
-    inputs={"training": f"{data_s3_uri}/cifar10/train"}
+    inputs={"training": f"{data_s3_uri}cifar10/train"}
+
 )
 
 model = Model(
