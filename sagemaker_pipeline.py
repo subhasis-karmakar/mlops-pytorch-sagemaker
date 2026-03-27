@@ -5,7 +5,7 @@ from sagemaker.workflow.model_step import ModelStep
 from sagemaker.pytorch import PyTorch
 from sagemaker.model import Model
 
-# Pull role from environment (set in GitHub Actions secrets)
+# Pull role from environment (set in GitHub Actions secrets or hard-coded for now)
 role = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
 # Terraform outputs (replace with env vars if you prefer)
@@ -25,14 +25,14 @@ estimator = PyTorch(
     checkpoint_local_path="/opt/ml/checkpoints"
 )
 
-# Training step (no checkpoint_config here)
+# Training step
 train_step = TrainingStep(
     name="TrainModel",
     estimator=estimator,
     inputs={"training": f"{data_s3_uri}/cifar10/train"}
 )
 
-# Model registration step
+# Model definition
 model = Model(
     image_uri=estimator.training_image_uri(),
     model_data=train_step.properties.ModelArtifacts.S3ModelArtifacts,
@@ -41,7 +41,14 @@ model = Model(
     source_dir="src"
 )
 
-model_step = ModelStep(name="RegisterModel", model=model)
+# Build step_args from model.create()
+model_step_args = model.create(instance_type="ml.m5.large")
+
+# Model registration step
+model_step = ModelStep(
+    name="RegisterModel",
+    step_args=model_step_args
+)
 
 # Pipeline definition
 pipeline = Pipeline(
