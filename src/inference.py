@@ -4,13 +4,24 @@ import sys
 
 import torch
 
-# SageMaker copies source_dir="src" contents into /opt/ml/model/code
-# so inference.py and model.py sit side-by-side at runtime.
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
 from model import SimpleCNN
+
+CLASS_NAMES = [
+    "airplane",
+    "automobile",
+    "bird",
+    "cat",
+    "deer",
+    "dog",
+    "frog",
+    "horse",
+    "ship",
+    "truck",
+]
 
 
 def model_fn(model_dir):
@@ -27,21 +38,26 @@ def input_fn(request_body, content_type):
         if "instances" not in data:
             raise ValueError("Missing 'instances' key in request payload")
 
-        tensor = torch.tensor(data["instances"], dtype=torch.float32)
-        return tensor
+        return torch.tensor(data["instances"], dtype=torch.float32)
 
     raise ValueError(f"Unsupported content type: {content_type}")
 
 
 def predict_fn(input_data, model):
     with torch.no_grad():
-        outputs = model(input_data)
-        return outputs
+        return model(input_data)
 
 
 def output_fn(prediction, accept):
     if accept == "application/json":
-        predicted_classes = torch.argmax(prediction, dim=1).tolist()
-        return json.dumps({"predictions": predicted_classes}), accept
+        predicted_ids = torch.argmax(prediction, dim=1).tolist()
+        predicted_labels = [CLASS_NAMES[i] for i in predicted_ids]
+
+        return json.dumps(
+            {
+                "predictions": predicted_ids,
+                "labels": predicted_labels,
+            }
+        ), accept
 
     raise ValueError(f"Unsupported accept type: {accept}")
