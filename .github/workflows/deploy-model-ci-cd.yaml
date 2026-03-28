@@ -1,24 +1,83 @@
-name: Deploy model to SageMaker endpoint
+name: SageMaker Model Registry Deploy
 
 on:
   workflow_dispatch:
-#  push:
-#    branches: [ main ]
+    inputs:
+      deploy_mode:
+        description: "latest_approved | model_version | model_package_arn"
+        required: true
+        default: "latest_approved"
+      model_version:
+        description: "Required only when deploy_mode=model_version"
+        required: false
+        default: ""
+      model_package_arn:
+        description: "Required only when deploy_mode=model_package_arn"
+        required: false
+        default: ""
 
 jobs:
-  build-and-deploy:
+  deploy-model:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Validate inputs
+        shell: bash
+        run: |
+          MODE="${{ github.event.inputs.deploy_mode }}"
+          VERSION="${{ github.event.inputs.model_version }}"
+          ARN="${{ github.event.inputs.model_package_arn }}"
+
+          if [ "$MODE" = "model_version" ] && [ -z "$VERSION" ]; then
+            echo "model_version is required when deploy_mode=model_version"
+            exit 1
+          fi
+
+          if [ "$MODE" = "model_package_arn" ] && [ -z "$ARN" ]; then
+            echo "model_package_arn is required when deploy_mode=model_package_arn"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
-      - run: pip install -r requirements.txt
-      - run: |
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
           export PYTHONPATH=$PYTHONPATH:$(pwd)
-#          pytest tests/test_deploy_model.py
-      - env:
+          pytest tests/
+
+      - name: Deploy model from SageMaker Model Registry
+        env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-west-2
-        run: python src/deploy_model.py
+          MODEL_VERSION: ${{ github.event.inputs.model_version }}
+          MODEL_PACKAGE_ARN: ${{ github.event.inputs.model_package_arn }}
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)
+
+          MODE="${{ github.event.inputs.deploy_mode }}"
+
+          if [ "$MODE" = "latest_approved" ]; then
+            unset MODEL_VERSION
+            unset MODEL_PACKAGE_ARN
+          elif [ "$MODE" = "model_version" ]; then
+            unset MODEL_PACKAGE_ARN
+          elif [ "$MODE" = "model_package_arn" ]; then
+            unset MODEL_VERSION
+          else
+            echo "Unsupported deploy_mode: $MODE"
+            exit 1
+          fi
+
+          python src/deploy_model.py

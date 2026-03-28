@@ -6,9 +6,9 @@ from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.parameters import ParameterFloat
 from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.condition_step import ConditionStep
-from sagemaker.workflow.step_collections import RegisterModel
 from sagemaker.workflow.fail_step import FailStep
 from sagemaker.workflow.execution_variables import ExecutionVariables
+from sagemaker.workflow.model_step import ModelStep
 
 from sagemaker.pytorch import PyTorch
 from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
@@ -139,17 +139,28 @@ def build_pipeline() -> Pipeline:
         )
     )
 
-    register_step = RegisterModel(
-        name="RegisterModel",
-        estimator=estimator,
-        model_data=train_step.properties.ModelArtifacts.S3ModelArtifacts,
-        content_types=["application/x-image"],
+    # IMPORTANT:
+    # Build a hosting model object that includes custom inference code.
+    # Since source_dir is "src", entry_point must be "inference.py", not "src/inference.py".
+    hosting_model = estimator.create_model(
+        entry_point="inference.py",
+        source_dir="src",
+        role=ROLE,
+    )
+
+    register_args = hosting_model.register(
+        content_types=["application/json"],
         response_types=["application/json"],
         inference_instances=[REGISTER_INFERENCE_INSTANCE],
         transform_instances=[REGISTER_TRANSFORM_INSTANCE],
         model_package_group_name=MODEL_PACKAGE_GROUP_NAME,
         model_metrics=model_metrics,
         approval_status="Approved",
+    )
+
+    register_step = ModelStep(
+        name="RegisterModel",
+        step_args=register_args,
     )
 
     fail_step = FailStep(
