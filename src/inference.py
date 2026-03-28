@@ -1,7 +1,16 @@
 import json
+import os
+import sys
+
 import torch
 
-from src.model import SimpleCNN
+# SageMaker copies source_dir="src" contents into /opt/ml/model/code
+# so inference.py and model.py sit side-by-side at runtime.
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.append(CURRENT_DIR)
+
+from model import SimpleCNN
 
 
 def model_fn(model_dir):
@@ -14,8 +23,12 @@ def model_fn(model_dir):
 def input_fn(request_body, content_type):
     if content_type == "application/json":
         data = json.loads(request_body)
-        instances = data["instances"]
-        return torch.tensor(instances, dtype=torch.float32)
+
+        if "instances" not in data:
+            raise ValueError("Missing 'instances' key in request payload")
+
+        tensor = torch.tensor(data["instances"], dtype=torch.float32)
+        return tensor
 
     raise ValueError(f"Unsupported content type: {content_type}")
 
