@@ -38,9 +38,6 @@ accuracy_threshold = ParameterFloat(
 
 
 def build_pipeline() -> Pipeline:
-    # -------------------------
-    # Training step
-    # -------------------------
     estimator = PyTorch(
         entry_point="src/train.py",
         source_dir=".",
@@ -72,9 +69,6 @@ def build_pipeline() -> Pipeline:
         step_args=train_args,
     )
 
-    # -------------------------
-    # Evaluation step
-    # -------------------------
     script_eval = ScriptProcessor(
         image_uri=estimator.training_image_uri(),
         command=["python3"],
@@ -113,18 +107,12 @@ def build_pipeline() -> Pipeline:
         property_files=[evaluation_report],
     )
 
-    # -------------------------
-    # Read evaluation accuracy
-    # -------------------------
     eval_accuracy = JsonGet(
         step_name=eval_step.name,
         property_file=evaluation_report,
-        json_path="evaluation.accuracy",
+        json_path="accuracy",
     )
 
-    # -------------------------
-    # Model metrics for registry
-    # -------------------------
     model_metrics = ModelMetrics(
         model_statistics=MetricsSource(
             s3_uri=Join(
@@ -138,9 +126,6 @@ def build_pipeline() -> Pipeline:
         )
     )
 
-    # -------------------------
-    # Register model
-    # -------------------------
     register_step = RegisterModel(
         name="RegisterModel",
         estimator=estimator,
@@ -154,17 +139,11 @@ def build_pipeline() -> Pipeline:
         approval_status="Approved",
     )
 
-    # -------------------------
-    # Fail explicitly if accuracy is too low
-    # -------------------------
     fail_step = FailStep(
         name="AccuracyTooLow",
         error_message="Model accuracy did not meet threshold for registration.",
     )
 
-    # -------------------------
-    # Condition step
-    # -------------------------
     cond_step = ConditionStep(
         name="CheckAccuracy",
         conditions=[
@@ -177,9 +156,6 @@ def build_pipeline() -> Pipeline:
         else_steps=[fail_step],
     )
 
-    # -------------------------
-    # Pipeline
-    # -------------------------
     return Pipeline(
         name=PIPELINE_NAME,
         parameters=[accuracy_threshold],

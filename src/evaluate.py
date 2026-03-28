@@ -77,13 +77,11 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
     confusion = confusion_matrix(labels, preds).tolist()
 
     metrics = {
-        "evaluation": {
-            "accuracy": float(accuracy),
-            "precision": float(report["weighted avg"]["precision"]),
-            "recall": float(report["weighted avg"]["recall"]),
-            "f1": float(report["weighted avg"]["f1-score"]),
-            "confusion_matrix": confusion
-        }
+        "accuracy": float(accuracy),
+        "precision": float(report["weighted avg"]["precision"]),
+        "recall": float(report["weighted avg"]["recall"]),
+        "f1": float(report["weighted avg"]["f1-score"]),
+        "confusion_matrix": confusion
     }
 
     os.makedirs(output_dir, exist_ok=True)
@@ -92,6 +90,7 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f)
 
+    print("FINAL METRICS:", json.dumps(metrics))
     print(f"Evaluation complete. Accuracy: {accuracy:.4f}")
     print(f"Saved evaluation report to: {output_path}")
 
