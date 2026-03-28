@@ -39,6 +39,9 @@ accuracy_threshold = ParameterFloat(
 
 
 def build_pipeline() -> Pipeline:
+    # -------------------------
+    # Training
+    # -------------------------
     estimator = PyTorch(
         entry_point="src/train.py",
         source_dir=".",
@@ -70,6 +73,9 @@ def build_pipeline() -> Pipeline:
         step_args=train_args,
     )
 
+    # -------------------------
+    # Evaluation
+    # -------------------------
     script_eval = ScriptProcessor(
         image_uri=estimator.training_image_uri(),
         command=["python3"],
@@ -96,6 +102,7 @@ def build_pipeline() -> Pipeline:
 
     eval_args = script_eval.run(
         code="src/evaluate.py",
+        source_dir=".",
         inputs=[
             ProcessingInput(
                 source=train_step.properties.ModelArtifacts.S3ModelArtifacts,
@@ -117,12 +124,18 @@ def build_pipeline() -> Pipeline:
         property_files=[evaluation_report],
     )
 
+    # -------------------------
+    # Accuracy gate
+    # -------------------------
     eval_accuracy = JsonGet(
         step_name=eval_step.name,
         property_file=evaluation_report,
         json_path="accuracy",
     )
 
+    # -------------------------
+    # Model metrics for registry
+    # -------------------------
     model_metrics = ModelMetrics(
         model_statistics=MetricsSource(
             s3_uri=Join(
@@ -136,6 +149,9 @@ def build_pipeline() -> Pipeline:
         )
     )
 
+    # -------------------------
+    # Register model
+    # -------------------------
     register_step = RegisterModel(
         name="RegisterModel",
         estimator=estimator,
@@ -149,6 +165,9 @@ def build_pipeline() -> Pipeline:
         approval_status="Approved",
     )
 
+    # -------------------------
+    # Fail if threshold not met
+    # -------------------------
     fail_step = FailStep(
         name="AccuracyTooLow",
         error_message="Model accuracy did not meet threshold for registration.",

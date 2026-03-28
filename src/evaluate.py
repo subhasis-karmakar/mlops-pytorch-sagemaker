@@ -1,26 +1,22 @@
 import os
+import sys
 import json
 import argparse
 import tarfile
 
 import torch
-import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
+# Make repo root importable when running inside SageMaker Processing
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(CURRENT_DIR)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
-class SimpleCNN(nn.Module):
-    def __init__(self):
-        super(SimpleCNN, self).__init__()
-        self.conv = nn.Conv2d(3, 32, 3, 1)
-        self.fc = nn.Linear(32 * 30 * 30, 10)
-
-    def forward(self, x):
-        x = nn.functional.relu(self.conv(x))
-        x = x.view(x.size(0), -1)
-        return self.fc(x)
+from src.model import SimpleCNN
 
 
 def extract_model_artifact(model_tar_path: str, extract_dir: str) -> str:
@@ -76,6 +72,7 @@ def evaluate(model_artifact_path: str, data_dir: str, output_dir: str) -> None:
     report = classification_report(labels, preds, output_dict=True)
     confusion = confusion_matrix(labels, preds).tolist()
 
+    # flat JSON is safer for JsonGet
     metrics = {
         "accuracy": float(accuracy),
         "precision": float(report["weighted avg"]["precision"]),
