@@ -33,7 +33,7 @@ pipeline_session = PipelineSession()
 
 accuracy_threshold = ParameterFloat(
     name="AccuracyThreshold",
-    default_value=0.20,
+    default_value=0.50,
 )
 
 
