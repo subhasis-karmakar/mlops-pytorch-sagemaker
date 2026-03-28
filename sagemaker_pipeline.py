@@ -11,6 +11,7 @@ from sagemaker.workflow.execution_variables import ExecutionVariables
 from sagemaker.workflow.model_step import ModelStep
 
 from sagemaker.pytorch import PyTorch
+from sagemaker.pytorch.model import PyTorchModel
 from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
 from sagemaker.model_metrics import MetricsSource, ModelMetrics
 from sagemaker.inputs import TrainingInput
@@ -139,13 +140,15 @@ def build_pipeline() -> Pipeline:
         )
     )
 
-    # IMPORTANT:
-    # Build a hosting model object that includes custom inference code.
-    # Since source_dir is "src", entry_point must be "inference.py", not "src/inference.py".
-    hosting_model = estimator.create_model(
+    # Build hosting model from pipeline training output, not estimator.model_data
+    hosting_model = PyTorchModel(
+        model_data=train_step.properties.ModelArtifacts.S3ModelArtifacts,
+        role=ROLE,
         entry_point="inference.py",
         source_dir="src",
-        role=ROLE,
+        framework_version=FRAMEWORK_VERSION,
+        py_version=PY_VERSION,
+        sagemaker_session=pipeline_session,
     )
 
     register_args = hosting_model.register(
