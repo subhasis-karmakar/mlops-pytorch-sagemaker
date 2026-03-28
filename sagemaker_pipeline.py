@@ -8,6 +8,7 @@ from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.condition_step import ConditionStep
 from sagemaker.workflow.step_collections import RegisterModel
 from sagemaker.workflow.fail_step import FailStep
+from sagemaker.workflow.execution_variables import ExecutionVariables
 
 from sagemaker.pytorch import PyTorch
 from sagemaker.processing import ScriptProcessor, ProcessingInput, ProcessingOutput
@@ -84,6 +85,15 @@ def build_pipeline() -> Pipeline:
         path="evaluation.json",
     )
 
+    evaluation_s3_uri = Join(
+        on="/",
+        values=[
+            MONITORING_S3_URI.rstrip("/"),
+            "evaluation",
+            ExecutionVariables.PIPELINE_EXECUTION_ID,
+        ],
+    )
+
     eval_args = script_eval.run(
         code="src/evaluate.py",
         inputs=[
@@ -96,7 +106,7 @@ def build_pipeline() -> Pipeline:
             ProcessingOutput(
                 output_name="evaluation",
                 source="/opt/ml/processing/evaluation",
-                destination=f"{MONITORING_S3_URI}evaluation",
+                destination=evaluation_s3_uri,
             )
         ],
     )
