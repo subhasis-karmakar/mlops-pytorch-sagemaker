@@ -16,6 +16,9 @@ from sagemaker.model_metrics import MetricsSource, ModelMetrics
 from sagemaker.inputs import TrainingInput
 
 
+# ---------------------------------
+# Configuration
+# ---------------------------------
 ROLE = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
 CHECKPOINT_S3_URI = "s3://mlops-checkpoints-bucket-8a20dd98/"
@@ -30,6 +33,9 @@ EVAL_INSTANCE_TYPE = "ml.t3.medium"
 REGISTER_INFERENCE_INSTANCE = "ml.m5.large"
 REGISTER_TRANSFORM_INSTANCE = "ml.m5.large"
 
+FRAMEWORK_VERSION = "1.12"
+PY_VERSION = "py38"
+
 pipeline_session = PipelineSession()
 
 accuracy_threshold = ParameterFloat(
@@ -39,14 +45,17 @@ accuracy_threshold = ParameterFloat(
 
 
 def build_pipeline() -> Pipeline:
+    # ---------------------------------
+    # Training step
+    # ---------------------------------
     estimator = PyTorch(
         entry_point="src/train.py",
         source_dir=".",
         role=ROLE,
         instance_type=TRAIN_INSTANCE_TYPE,
         instance_count=1,
-        framework_version="1.12",
-        py_version="py38",
+        framework_version=FRAMEWORK_VERSION,
+        py_version=PY_VERSION,
         hyperparameters={
             "epochs": 5,
             "batch_size": 64,
@@ -70,6 +79,9 @@ def build_pipeline() -> Pipeline:
         step_args=train_args,
     )
 
+    # ---------------------------------
+    # Evaluation step
+    # ---------------------------------
     script_eval = ScriptProcessor(
         image_uri=estimator.training_image_uri(),
         command=["python3"],
@@ -85,7 +97,7 @@ def build_pipeline() -> Pipeline:
         path="evaluation.json",
     )
 
-    evaluation_s3_uri = Join(
+    evaluation_output_s3_uri = Join(
         on="/",
         values=[
             MONITORING_S3_URI.rstrip("/"),
@@ -106,7 +118,7 @@ def build_pipeline() -> Pipeline:
             ProcessingOutput(
                 output_name="evaluation",
                 source="/opt/ml/processing/evaluation",
-                destination=evaluation_s3_uri,
+                destination=evaluation_output_s3_uri,
             )
         ],
     )
@@ -117,12 +129,18 @@ def build_pipeline() -> Pipeline:
         property_files=[evaluation_report],
     )
 
+    # ---------------------------------
+    # Read metric from evaluation.json
+    # ---------------------------------
     eval_accuracy = JsonGet(
         step_name=eval_step.name,
         property_file=evaluation_report,
         json_path="accuracy",
     )
 
+    # ---------------------------------
+    # Model metrics for registry
+    # ---------------------------------
     model_metrics = ModelMetrics(
         model_statistics=MetricsSource(
             s3_uri=Join(
@@ -136,6 +154,9 @@ def build_pipeline() -> Pipeline:
         )
     )
 
+    # ---------------------------------
+    # Register model
+    # ---------------------------------
     register_step = RegisterModel(
         name="RegisterModel",
         estimator=estimator,
@@ -149,12 +170,18 @@ def build_pipeline() -> Pipeline:
         approval_status="Approved",
     )
 
+    # ---------------------------------
+    # Fails pipeline if threshold not met
+    # ---------------------------------
     fail_step = FailStep(
         name="AccuracyTooLow",
         error_message="Model accuracy did not meet threshold for registration.",
     )
 
-    cond_step = ConditionStep(
+    # ---------------------------------
+    # Conditional registration
+    # ---------------------------------
+    condition_step = ConditionStep(
         name="CheckAccuracy",
         conditions=[
             ConditionGreaterThanOrEqualTo(
@@ -166,10 +193,13 @@ def build_pipeline() -> Pipeline:
         else_steps=[fail_step],
     )
 
+    # ---------------------------------
+    # Final pipeline
+    # ---------------------------------
     return Pipeline(
         name=PIPELINE_NAME,
         parameters=[accuracy_threshold],
-        steps=[train_step, eval_step, cond_step],
+        steps=[train_step, eval_step, condition_step],
         sagemaker_session=pipeline_session,
     )
 
