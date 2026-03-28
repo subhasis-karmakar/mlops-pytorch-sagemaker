@@ -15,8 +15,7 @@ def input_fn(request_body, content_type):
     if content_type == "application/json":
         data = json.loads(request_body)
         instances = data["instances"]
-        tensor = torch.tensor(instances, dtype=torch.float32)
-        return tensor
+        return torch.tensor(instances, dtype=torch.float32)
 
     raise ValueError(f"Unsupported content type: {content_type}")
 
@@ -24,12 +23,12 @@ def input_fn(request_body, content_type):
 def predict_fn(input_data, model):
     with torch.no_grad():
         outputs = model(input_data)
-        _, predicted = torch.max(outputs, 1)
-        return predicted.tolist()
+        return outputs
 
 
 def output_fn(prediction, accept):
     if accept == "application/json":
-        return json.dumps({"predictions": prediction}), accept
+        predicted_classes = torch.argmax(prediction, dim=1).tolist()
+        return json.dumps({"predictions": predicted_classes}), accept
 
     raise ValueError(f"Unsupported accept type: {accept}")
