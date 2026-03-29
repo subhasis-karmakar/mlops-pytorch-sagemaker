@@ -2,7 +2,7 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
-REGION = "us-west-2"
+REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-2")
 ROLE_ARN = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 
 MODEL_PACKAGE_GROUP_NAME = "PyTorchMLOpsModelGroup"
@@ -13,6 +13,11 @@ ENDPOINT_NAME = "pytorch-mlops-registry-endpoint"
 
 INSTANCE_TYPE = "ml.m5.large"
 INITIAL_INSTANCE_COUNT = 1
+
+# Data capture for Model Monitor
+DATA_CAPTURE_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/datacapture"
+DATA_CAPTURE_ENABLED = True
+DATA_CAPTURE_SAMPLING_PERCENTAGE = 100
 
 # Optional selectors
 MODEL_PACKAGE_ARN = os.getenv("MODEL_PACKAGE_ARN")
@@ -89,9 +94,9 @@ def ensure_endpoint_config(endpoint_config_name: str, model_name: str) -> None:
         if "Could not find endpoint configuration" not in str(e):
             raise
 
-    sm.create_endpoint_config(
-        EndpointConfigName=endpoint_config_name,
-        ProductionVariants=[
+    create_kwargs = {
+        "EndpointConfigName": endpoint_config_name,
+        "ProductionVariants": [
             {
                 "VariantName": "AllTraffic",
                 "ModelName": model_name,
@@ -100,7 +105,23 @@ def ensure_endpoint_config(endpoint_config_name: str, model_name: str) -> None:
                 "InitialVariantWeight": 1.0,
             }
         ],
-    )
+    }
+
+    if DATA_CAPTURE_ENABLED:
+        create_kwargs["DataCaptureConfig"] = {
+            "EnableCapture": True,
+            "InitialSamplingPercentage": DATA_CAPTURE_SAMPLING_PERCENTAGE,
+            "DestinationS3Uri": DATA_CAPTURE_S3_URI,
+            "CaptureOptions": [
+                {"CaptureMode": "Input"},
+                {"CaptureMode": "Output"},
+            ],
+            "CaptureContentTypeHeader": {
+                "JsonContentTypes": ["application/json"],
+            },
+        }
+
+    sm.create_endpoint_config(**create_kwargs)
     print(f"Created endpoint config: {endpoint_config_name}")
 
 
@@ -140,3 +161,5 @@ if __name__ == "__main__":
     create_or_update_endpoint(ENDPOINT_NAME, ENDPOINT_CONFIG_NAME)
 
     print(f"Deployment complete. Endpoint name: {ENDPOINT_NAME}")
+    if DATA_CAPTURE_ENABLED:
+        print(f"Data capture enabled → {DATA_CAPTURE_S3_URI}")
