@@ -1,8 +1,9 @@
+import os
 import boto3
 from sagemaker.session import Session
 from sagemaker.model_monitor import DefaultModelMonitor, DatasetFormat
 
-REGION = "us-west-2"
+REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-2")
 ROLE_ARN = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 ENDPOINT_NAME = "pytorch-mlops-registry-endpoint"
 
@@ -11,6 +12,7 @@ BASELINE_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/baselines/data-q
 MONITOR_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/monitoring/data-quality"
 
 MONITOR_SCHEDULE_NAME = "pytorch-mlops-data-quality-monitor"
+MONITOR_INSTANCE_TYPE = os.getenv("MONITOR_INSTANCE_TYPE", "ml.t3.medium")
 
 boto_session = boto3.Session(region_name=REGION)
 sagemaker_session = Session(boto_session=boto_session)
@@ -20,13 +22,13 @@ def main():
     monitor = DefaultModelMonitor(
         role=ROLE_ARN,
         instance_count=1,
-        instance_type="ml.m5.large",
+        instance_type=MONITOR_INSTANCE_TYPE,
         volume_size_in_gb=20,
         max_runtime_in_seconds=3600,
         sagemaker_session=sagemaker_session,
     )
 
-    print("Creating baseline for data quality monitor...")
+    print(f"Creating baseline using instance type: {MONITOR_INSTANCE_TYPE}")
     monitor.suggest_baseline(
         baseline_dataset=BASELINE_DATASET_S3_URI,
         dataset_format=DatasetFormat.json(lines=True),
