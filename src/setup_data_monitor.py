@@ -7,7 +7,7 @@ REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-2")
 ROLE_ARN = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 ENDPOINT_NAME = "pytorch-mlops-registry-endpoint"
 
-BASELINE_DATASET_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/baseline/baseline-input.jsonl"
+BASELINE_DATASET_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/baseline/baseline-input.json"
 BASELINE_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/baselines/data-quality"
 MONITOR_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/monitoring/data-quality"
 
