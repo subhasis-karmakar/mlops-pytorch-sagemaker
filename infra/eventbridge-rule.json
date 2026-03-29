@@ -1,0 +1,14 @@
+{
+  "Name": "pytorch-mlops-retraining-rule",
+  "EventPattern": {
+    "source": ["aws.cloudwatch"],
+    "detail-type": ["CloudWatch Alarm State Change"],
+    "detail": {
+      "state": {
+        "value": ["ALARM"]
+      }
+    }
+  },
+  "State": "ENABLED",
+  "Description": "Trigger retraining when drift or endpoint alarm moves to ALARM state"
+}

@@ -8,8 +8,15 @@ runtime = boto3.client("sagemaker-runtime", region_name="us-west-2")
 
 ENDPOINT_NAME = "pytorch-mlops-registry-endpoint"
 
+
 class PredictRequest(BaseModel):
     instances: list
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 
 @app.post("/predict")
 def predict(req: PredictRequest):
