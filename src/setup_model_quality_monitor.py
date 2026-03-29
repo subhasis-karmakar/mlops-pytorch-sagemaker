@@ -12,7 +12,7 @@ GROUND_TRUTH_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/groundtruth/"
 MONITOR_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/monitoring/model-quality"
 
 MONITOR_SCHEDULE_NAME = "pytorch-mlops-model-quality-monitor"
-MONITOR_INSTANCE_TYPE = os.getenv("MONITOR_INSTANCE_TYPE", "ml.m5.xlarge")
+MONITOR_INSTANCE_TYPE = os.getenv("MONITOR_INSTANCE_TYPE", "ml.m5.2xlarge")
 
 boto_session = boto3.Session(region_name=REGION)
 sagemaker_session = Session(boto_session=boto_session)
