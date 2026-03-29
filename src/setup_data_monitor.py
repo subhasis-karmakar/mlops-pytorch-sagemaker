@@ -12,7 +12,7 @@ BASELINE_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/baselines/data-q
 MONITOR_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/monitoring/data-quality"
 
 MONITOR_SCHEDULE_NAME = "pytorch-mlops-data-quality-monitor"
-MONITOR_INSTANCE_TYPE = os.getenv("MONITOR_INSTANCE_TYPE", "ml.t3.medium")
+MONITOR_INSTANCE_TYPE = os.getenv("MONITOR_INSTANCE_TYPE", "ml.m5.xlarge")
 
 boto_session = boto3.Session(region_name=REGION)
 sagemaker_session = Session(boto_session=boto_session)
@@ -43,7 +43,7 @@ def main():
         endpoint_input=ENDPOINT_NAME,
         output_s3_uri=MONITOR_OUTPUT_S3_URI,
         statistics=monitor.baseline_statistics(),
-        constraints=monitor.baseline_constraints(),
+        constraints=monitor.suggested_constraints(),
         schedule_cron_expression="cron(0 * ? * * *)",
         enable_cloudwatch_metrics=True,
     )
