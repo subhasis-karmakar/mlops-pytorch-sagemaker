@@ -1,0 +1,192 @@
+name: Setup Retraining Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      lambda_role_arn:
+        description: "IAM role ARN for Lambda"
+        required: true
+        default: "arn:aws:iam::628479576048:role/LambdaRetrainRole"
+      account_id:
+        description: "AWS Account ID"
+        required: true
+        default: "628479576048"
+
+jobs:
+  setup-retraining:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_DEFAULT_REGION: us-west-2
+      LAMBDA_FUNCTION_NAME: pytorch-mlops-trigger-retraining
+      EVENTBRIDGE_RULE_NAME: pytorch-mlops-retraining-rule
+      ALARM_NAME: pytorch-mlops-endpoint-5xx
+      SNS_TOPIC_NAME: pytorch-mlops-alerts
+      EMAIL: subhasis18.karmakar@gmail.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # ----------------------------------------
+      # 1. Create SNS topic (if not exists)
+      # ----------------------------------------
+      - name: Create SNS topic
+        id: sns
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          TOPIC_ARN=$(aws sns create-topic \
+            --name $SNS_TOPIC_NAME \
+            --region $AWS_DEFAULT_REGION \
+            --query 'TopicArn' \
+            --output text)
+
+          echo "SNS_TOPIC_ARN=$TOPIC_ARN" >> $GITHUB_ENV
+          echo "Created/Found SNS topic: $TOPIC_ARN"
+
+      # ----------------------------------------
+      # 2. Subscribe email
+      # ----------------------------------------
+      - name: Subscribe email to SNS
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws sns subscribe \
+            --topic-arn $SNS_TOPIC_ARN \
+            --protocol email \
+            --notification-endpoint $EMAIL \
+            --region $AWS_DEFAULT_REGION || true
+
+          echo " Check your email and CONFIRM subscription!"
+
+      # ----------------------------------------
+      # 3. Package Lambda
+      # ----------------------------------------
+      - name: Package Lambda
+        run: |
+          mkdir -p build/lambda
+          cp src/trigger_retraining.py build/lambda/
+          cd build/lambda
+          zip retraining_lambda.zip trigger_retraining.py
+
+      # ----------------------------------------
+      # 4. Create / Update Lambda
+      # ----------------------------------------
+      - name: Create or update Lambda
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          LAMBDA_ROLE_ARN: ${{ github.event.inputs.lambda_role_arn }}
+        run: |
+          set -e
+
+          if aws lambda get-function \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --region $AWS_DEFAULT_REGION > /dev/null 2>&1; then
+
+            echo "Updating Lambda..."
+            aws lambda update-function-code \
+              --function-name $LAMBDA_FUNCTION_NAME \
+              --zip-file fileb://build/lambda/retraining_lambda.zip \
+              --region $AWS_DEFAULT_REGION
+
+          else
+            echo "Creating Lambda..."
+            aws lambda create-function \
+              --function-name $LAMBDA_FUNCTION_NAME \
+              --runtime python3.9 \
+              --handler trigger_retraining.lambda_handler \
+              --zip-file fileb://build/lambda/retraining_lambda.zip \
+              --role $LAMBDA_ROLE_ARN \
+              --region $AWS_DEFAULT_REGION
+          fi
+
+      # ----------------------------------------
+      # 5. Create EventBridge rule
+      # ----------------------------------------
+      - name: Create EventBridge rule
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws events put-rule \
+            --name $EVENTBRIDGE_RULE_NAME \
+            --event-pattern file://infra/eventbridge-rule.json \
+            --state ENABLED \
+            --region $AWS_DEFAULT_REGION
+
+      # ----------------------------------------
+      # 6. Attach Lambda target
+      # ----------------------------------------
+      - name: Attach Lambda target
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ACCOUNT_ID: ${{ github.event.inputs.account_id }}
+        run: |
+          aws events put-targets \
+            --rule $EVENTBRIDGE_RULE_NAME \
+            --targets "Id"="1","Arn"="arn:aws:lambda:${AWS_DEFAULT_REGION}:${ACCOUNT_ID}:function:${LAMBDA_FUNCTION_NAME}" \
+            --region $AWS_DEFAULT_REGION
+
+      # ----------------------------------------
+      # 7. Allow EventBridge → Lambda
+      # ----------------------------------------
+      - name: Add Lambda permission
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ACCOUNT_ID: ${{ github.event.inputs.account_id }}
+        run: |
+          aws lambda add-permission \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --statement-id allow-eventbridge \
+            --action lambda:InvokeFunction \
+            --principal events.amazonaws.com \
+            --source-arn arn:aws:events:${AWS_DEFAULT_REGION}:${ACCOUNT_ID}:rule/${EVENTBRIDGE_RULE_NAME} \
+            --region $AWS_DEFAULT_REGION || true
+
+      # ----------------------------------------
+      # 8. Create CloudWatch Alarm
+      # ----------------------------------------
+      - name: Create CloudWatch Alarm
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws cloudwatch put-metric-alarm \
+            --alarm-name $ALARM_NAME \
+            --metric-name Invocation5XXErrors \
+            --namespace AWS/SageMaker \
+            --statistic Sum \
+            --period 300 \
+            --threshold 1 \
+            --comparison-operator GreaterThanOrEqualToThreshold \
+            --evaluation-periods 1 \
+            --alarm-actions $SNS_TOPIC_ARN \
+            --dimensions Name=EndpointName,Value=pytorch-mlops-registry-endpoint \
+            --region $AWS_DEFAULT_REGION
+
+      # ----------------------------------------
+      # 9. Test Lambda → trigger pipeline
+      # ----------------------------------------
+      - name: Test Lambda trigger
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws lambda invoke \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --payload '{}' \
+            response.json \
+            --region $AWS_DEFAULT_REGION
+
+          cat response.json
