@@ -9,7 +9,6 @@ ROLE_ARN = "arn:aws:iam::628479576048:role/SageMakerExecutionRole"
 ENDPOINT_NAME = "pytorch-mlops-registry-endpoint"
 
 GROUND_TRUTH_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/groundtruth/"
-BASELINE_RESULTS_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/baselines/model-quality"
 MONITOR_OUTPUT_S3_URI = "s3://mlops-monitoring-bucket-b9c36351/monitoring/model-quality"
 
 MONITOR_SCHEDULE_NAME = "pytorch-mlops-model-quality-monitor"
@@ -39,6 +38,7 @@ def main():
                 destination="/opt/ml/processing/input/endpoint",
                 start_time_offset="-P2D",
                 end_time_offset="-P1D",
+                inference_attribute="predictions",
             ),
             ground_truth_input=GROUND_TRUTH_S3_URI,
             output_s3_uri=MONITOR_OUTPUT_S3_URI,
