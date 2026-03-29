@@ -43,13 +43,13 @@ def main():
             ground_truth_input=GROUND_TRUTH_S3_URI,
             output_s3_uri=MONITOR_OUTPUT_S3_URI,
             problem_type="MulticlassClassification",
-            schedule_cron_expression="cron(30 * ? * * *)",
+            schedule_cron_expression="cron(0 * ? * * *)",
             enable_cloudwatch_metrics=True,
         )
     except ClientError as e:
         raise RuntimeError(
             f"Failed to create model quality monitor. "
-            f"Check SageMaker processing quota, endpoint data capture, and ground truth setup. "
+            f"Check SageMaker processing quota, endpoint data capture, ground truth setup, and schedule expression. "
             f"Original error: {e}"
         ) from e
 
